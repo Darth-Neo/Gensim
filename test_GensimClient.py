@@ -1,13 +1,12 @@
 #!/usr/bin/env python
-# __author__ = 'morrj140'
+# __author__ = "morrj140"
 from collections import defaultdict
-from pprint import pprint  # pretty-printer
 import Logger
 import os
+import pytest
 from gensim import corpora, models, similarities, matutils, utils
 from gensim.models import lsimodel
 from simserver import SessionServer
-import Pyro4
 
 logger = Logger.setupLogging(__name__)
 logger.setLevel(Logger.INFO)
@@ -17,14 +16,14 @@ fileCorpus = u"./run/corpus.mm"
 fileIndex = u"./run/corpus.mm.index"
 
 
-def printValues(d, traverse=False, n=0):
+def logValues(d, traverse=False, n=0):
     if isinstance(d, dict):
         for k, v in d.items():
             print(u"%d.%s[%s]" % (n, k, v))
             n += 1
 
             if traverse is True:
-                printValues(v)
+                logValues(v)
 
     elif isinstance(d, list):
         for v in d:
@@ -32,7 +31,7 @@ def printValues(d, traverse=False, n=0):
             n += 1
 
             if traverse is True:
-                printValues(v)
+                logValues(v)
 
 
 class MyCorpus(object):
@@ -46,7 +45,7 @@ class MyCorpus(object):
 
     def __iter__(self):
         for line in self.corpus:
-            # assume there's one document per line, tokens separated by whitespace
+            # assume there"s one document per line, tokens separated by whitespace
             yield self.dictionary.doc2bow(line.lower().split())
 
 
@@ -73,17 +72,17 @@ def updateCorpus(docs):
     corpus = MyCorpus(fileCorpus).corpus
 
     # Dictionary
-    print(u"Dictionary ======================================>")
+    logger.debug(u"Dictionary ======================================>")
     n = 0
     for k, v in dictionary.items():
-        print(u"%d.%s[%s]" % (n, k, v))
+        logger.debug(u"%d.%s[%s]" % (n, k, v))
         n += 1
 
     # Corpus
-    print(u"Corpus ======================================>")
+        logger.debug(u"Corpus ======================================>")
     n = 0
     for v in corpus:
-        print(u"%d.[%s]\t %s" % (n, v, docs[n]))
+        logger.debug(u"%d.[%s]\t %s" % (n, v, docs[n]))
         n += 1
 
     # File Index
@@ -137,15 +136,15 @@ def createCorpus(docs):
 
     n = 0
     for document in docs:
-        print(u"%s\n\t%s" % (document, ntexts[n]))
+        logger.debug(u"%s\n\t%s" % (document, ntexts[n]))
         n += 1
 
     diictionary = corpora.Dictionary(ntexts)
-    print
-    print(u"Words")
+
+    logger.debug(u"Words")
     printValues(diictionary)
-    print
-    print(u"Tokens")
+
+    logger.debug(u"Tokens")
     printValues(diictionary.token2id)
 
     # Document Test to Bag of Words
@@ -168,10 +167,9 @@ def createCorpus(docs):
     vec_bow = diictionary.doc2bow(doc.lower().split())
 
     # convert the query to LSI space
-    print
-    print(u"LSI %s" % doc)
+    logger.debug(u"LSI %s" % doc)
     vec_lsi = lsi[vec_bow]
-    print(vec_lsi)
+    logger.debug(vec_lsi)
 
     # transform corpus to LSI space and index it
     index = similarities.MatrixSimilarity(lsi[corpus])
@@ -180,12 +178,11 @@ def createCorpus(docs):
     sims = index[vec_lsi]
 
     # print (document_number, document_similarity) 2-tuples
-    print
-    print(u"Simularity")
+    logger.debug(u"Simularity")
     n = 0
     for v in list(enumerate(sims)):
-        print(u"%d.%s.%s" % (n, v, docs[n]))
-        print(u"\t%s" % ntexts[n])
+        logger.debug(u"%d.%s.%s" % (n, v, docs[n]))
+        logger.debug(u"\t%s" % ntexts[n])
         n += 1
 
     sims = sorted(enumerate(sims), key=lambda item: -item[1])
@@ -195,15 +192,8 @@ def createCorpus(docs):
     lsi.save(fileIndex)
 
 
-if __name__ == u"__main__":
-    gsDir = os.getcwd()
-    print u"GSDir %s" % gsDir
-
-    gss = gsDir + os.sep + u"gensim_server" + os.sep
-    print(u"%s" % gss)
-
-    server = SessionServer(gss)
-
+@pytest.fixture(scope=u"module")
+def getTexts():
     texts = [u"Human machine interface for lab abc computer applications",
              u"A survey of user opinion of computer system response time",
              u"The EPS user interface management system",
@@ -215,20 +205,45 @@ if __name__ == u"__main__":
              u"Graph minors A survey",
              u"Why use a computer"]
 
-    print server.status()
+    return texts
 
-    corpus = [{'id': 'doc_%i' % num, 'tokens': utils.simple_preprocess(text)} for num, text in enumerate(texts)]
+
+@pytest.mark.Gensim
+def test_Gensim(texts):
+    gsDir = os.getcwd()
+    logger.debug(u"GSDir %s" % gsDir)
+
+    gss = gsDir + os.sep + u"gensim_server" + os.sep
+    logger.debug(u"%s" % gss)
+
+    server = SessionServer(gss)
+
+    u""" texts = [u"Human machine interface for lab abc computer applications",
+             u"A survey of user opinion of computer system response time",
+             u"The EPS user interface management system",
+             u"System and human system engineering testing of EPS",
+             u"Relation of user perceived response time to error measurement",
+             u"The generation of random binary unordered trees",
+             u"The intersection graph of paths in trees",
+             u"Graph minors IV Widths of trees and well quasi ordering",
+             u"Graph minors A survey",
+             u"Why use a computer"]
+    """
+
+    logger.info(u"%s" % server.status())
+
+    corpus = [{u"id": u"doc_%i" % num, u"tokens": utils.simple_preprocess(text)} for num, text in enumerate(texts)]
 
     # send 1k docs at a time
     utils.upload_chunked(server, corpus, chunksize=1000)
 
-    server.train(corpus, method='lsi')
+    server.train(corpus, method=u"lsi")
 
     # index the same documents that we trained on...
     server.index(corpus)
 
     # supply a list of document ids to be removed from the index
-    # server.delete(['doc_5', 'doc_8'])
+    # server.delete(["doc_5", "doc_8"])
 
     # overall index size unchanged (just 3 docs overwritten)
     server.index(corpus[:3])
@@ -236,26 +251,28 @@ if __name__ == u"__main__":
     # Option Ons
     for n in range(0, len(texts)):
         doc = u"doc_%d" % n
-        print(u"Find similar doc_%d to %s" % (n, corpus[n]["tokens"]))
+        logger.info(u"Find similar doc_%d to %s" % (n, corpus[n][u"tokens"]))
         for sim in server.find_similar(doc):
             m = int(sim[0][-1:])
             if m != n:
-                print(u"\t%s \t %3.2f : %s" % (sim[0], float(sim[1]), corpus[m]["tokens"]))
+                logger.info(u"\t%s \t %3.2f : %s" % (sim[0], float(sim[1]), corpus[m][u"tokens"]))
 
-                d = [unicode(x) for x in corpus[n]["tokens"]]
-                e = [unicode(y) for y in corpus[m]["tokens"]]
+                d = [unicode(x) for x in corpus[n][u"tokens"]]
+                e = [unicode(y) for y in corpus[m][u"tokens"]]
 
                 s1 = set(e)
                 s2 = set(d)
                 common = s1 & s2
                 lc = [x for x in common]
-                print(u"\tCommon Topics : %s\n" % (lc))
+                logger.info(u"\tCommon Topics : %s\n" % (lc))
 
     if False:
         # Option two
-        doc = {'tokens': utils.simple_preprocess('Graph and minors and humans and trees.')}
-        print server.find_similar(doc, min_score=0.4, max_results=50)
+        doc = {u"tokens": utils.simple_preprocess(u"Graph and minors and humans and trees.")}
+        logger.info(u"%s" % server.find_similar(doc, min_score=0.4, max_results=50))
 
     # Pyro4 example
-    # service = Pyro4.Proxy(Pyro4.locateNS().lookup('gensim.testserver'))
+    # service = Pyro4.Proxy(Pyro4.locateNS().lookup("gensim.testserver"))
 
+if __name__ == u"__main__":
+    test_Gensim(getTexts())

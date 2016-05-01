@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import os
-from gensim import utils
 from simserver import SessionServer
 
 if __name__ == u"__main__":
