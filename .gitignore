@@ -1,8 +1,16 @@
 # Byte-compiled / optimized / DLL files
+.idea/
+Gensim/V1_RTP_Requirements.csv
+Gensim/logs/
+Pattern/logs/
+bin/
+man/
+include/
+share/
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.conf
 # C extensions
 *.so
 
