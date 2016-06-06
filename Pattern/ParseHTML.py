@@ -6,6 +6,7 @@ from pattern.text import *
 from pattern.text.search import *
 from pattern.text import tag, tree, pluralize, singularize
 from stopWords import *
+
 from Logger import *
 logger = setupLogging(__name__)
 logger.setLevel(INFO)
@@ -24,7 +25,8 @@ def stripTokens(word):
 
     return word
 
-def processPOS(s, lpos=u"NN"):
+def processPOS(s):
+    w = u""
     tg = tag(s)
     n = 0
     m = 0
@@ -32,11 +34,11 @@ def processPOS(s, lpos=u"NN"):
 
     for word, pos in tg:
         if word not in stop:
-            if pos == lpos or len(w) > 1:
+            if len(word) > 1:
                 m += 1
-                tg = list()
                 w = singularize(word)
-                tg.append(w)
+                tg = list()
+                tg.append(word)
                 tg.append(pos)
                 newTags.append(tg)
                 logger.debug(u"%d.Keep    : %s [%s]" % (m, w, pos))
@@ -68,7 +70,7 @@ def getValue(value):
     return v
 
 def h2pt():
-    w = u""
+    wst = u""
     
     start_time = startTimer()
 
@@ -77,31 +79,38 @@ def h2pt():
 
     cursor = projectDetails.find()
     n = 0
-    for pdp in cursor[3:6]:
+    for pdp in cursor:
         n += 1
-        logger.debug(u"%d.%s[%s]" % (n, pdp[u"spider"], pdp[u"last_updated"]))
-        html = pdp[u"Text"]
 
         try:
+            logger.debug(u"%d.%s[%s]" % (n, pdp[u"spider"], pdp[u"last_updated"]))
+            html = pdp[u"Text"]
+
+            if html is None or len(html) == 0:
+                logger.warn(u"html is None for %s:%s:%s:%s" %
+                            (pdp[u"project"], pdp[u"server"],
+                             pdp[u"spider"], pdp[u"Url"]))
+                continue
+
             s = plaintext(html, keep={u'h1':[], u'h2':[], u'strong':[], u'a':[]})
 
-            w = stripTokens(s)
+            wst = stripTokens(s)
 
-            tags, kept, dropped = processPOS(w)
+            tags, kept, dropped = processPOS(wst)
 
             logger.info(u"Kept : %d\tDropped : %d" % (kept, dropped))
 
-            sl4 = logNGRAMS(w, n=4)
-            sl3 = logNGRAMS(w, n=3)
-            sl2 = logNGRAMS(w, n=2)
+            sl4 = logNGRAMS(wst, n=4)
+            sl3 = logNGRAMS(wst, n=3)
+            sl2 = logNGRAMS(wst, n=2)
 
             # Execute a Regular Expression Search
-            ns = parsetree(w)
+            ns = parsetree(wst)
             p = r'(N[NP])+'
             q = search(p, ns)
 
             md = dict()
-            md[u"Tags"] = getValue(tags)
+            md[u"Tags"] = tags
             md[u"NG2"] = getValue(sl2)
             md[u"NG3"] = getValue(sl3)
             md[u"NG4"] = getValue(sl4)
