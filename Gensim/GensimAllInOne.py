@@ -1,15 +1,33 @@
 #!/usr/bin/env python
 # __author__ = "morrj140"
 from pymongo import MongoClient
-import Logger
+
 import os
 from gensim import utils
 from simserver import SessionServer
+from stopWords import *
 
-logger = Logger.setupLogging(__name__)
-logger.setLevel(Logger.INFO)
+from Logger import *
+logger = setupLogging(__name__)
+logger.setLevel(INFO)
 
-similarity = 0.50
+similarity = 0.80
+
+def stripTokens(words):
+
+    stripped = u""
+    stopped = u""
+    newWords = u""
+
+    for word in words.split():
+        if word in strp:
+            stripped += word + u" "
+        elif word in stop:
+            stopped += word + u" "
+        else:
+            newWords += word + u" "
+
+    return newWords, stopped, stripped
 
 def getTextsFromMongoDB():
     text = u""
@@ -31,34 +49,32 @@ def getTextsFromMongoDB():
             for word in pdp[u"Tags"]:
                 text = u"%s%s " % (text, word[0])
 
-
-        text = u"%s,%s" % (text,os.linesep)
+        text = u"%s,%s" % (text, os.linesep)
         words.append(text)
         logger.debug(u"Text : %s" % text[:50])
 
-    except Exception,msg:
+    except Exception, msg:
         logger.debug(u"%s" % msg)
 
     return words
 
-
-def getTexts():
-
+def getTexts(fileText):
     if True:
         texts = list()
 
-        with open(u"../PMIS Requirements.csv", u"rb") as f:
+        with open(fileText, u"rb") as f:
             lines = f.readlines()
 
             lines = lines[0].decode(u"utf-8", errors=u"replace")
             for x in lines.split(u"\r"):
                 try:
                     y = x.split(u",")[0].strip(u"\"\"")
+                    y, stopped, stripped = stripTokens(y)
                     texts.append(y)
                 except Exception, msg:
                     logger.error(u"%s" % msg)
 
-        logger.debug(u"Texts : %d" % len(texts))
+        logger.info(u"Texts : %d" % len(texts))
         return texts
     else:
         texts = [u"Human machine interface for lab abc computer applications",
@@ -72,16 +88,63 @@ def getTexts():
                  u"Graph minors A survey",
                  u"Why use a computer"]
 
+        logger.info(u"Texts : %d" % len(texts))
         return texts
 
+def findSimilar(texts, server, corpus):
+
+    similarities = list()
+
+    # Option Ons
+    for n in range(0, len(texts)):
+        doc_n = u"doc_%d" % n
+        logger.info(u"%s" % doc_n)
+        try:
+            for sim in server.find_similar(doc_n):
+                doc_m = sim[0]
+                doc_similarity = float(sim[1])
+                # Compares 'doc_m' to 'doc_n'
+                if doc_m != doc_n and doc_similarity > similarity:
+                    mi = int(doc_m.index(u"_") + 1)
+                    nm = int(doc_m[mi:])
+
+                    d = [unicode(x) for x in corpus[n][u"tokens"]]
+                    e = [unicode(y) for y in corpus[nm][u"tokens"]]
+
+                    s1 = set(e)
+                    s2 = set(d)
+                    common = s1 & s2
+                    lc = [x for x in common]
+
+                    if len(lc) == 0:
+                        logger.error(u"Something is wrong here!")
+                        raise Exception
+                    else:
+                        similar = list()
+                        similar.append(doc_n)
+                        similar.append(doc_m)
+                        similar.append(float(sim[1]))
+                        similar.append(lc)
+                        similarities.append(similar)
+
+                        logger.info(u"\t%s\t%s\t%3.2f\tCommon : %s" % (doc_n, doc_m, doc_similarity, lc))
+
+        except Exception, msg:
+            logger.error(u"%s", msg)
+
+        if False:
+            # Option two
+            doc = {u"tokens": utils.simple_preprocess(u"Graph and minors and humans and trees.")}
+            logger.info(u"%s" % server.find_similar(doc, min_score=0.4, max_results=50))
+            logger.error(u"%s - %d : %d" % (msg, nm, n))
+
+    return similarities
 
 def GensimClient(texts):
+    similarities = None
+
     gsDir = os.getcwd()
-    logger.debug(u"GSDir %s" % gsDir)
-
     gss = gsDir + os.sep + u"gensim_server" + os.sep
-    logger.debug(u"%s" % gss)
-
     server = SessionServer(gss)
 
     logger.debug(u"%s" % server.status())
@@ -97,58 +160,26 @@ def GensimClient(texts):
         # index the same documents that we trained on...
         server.index(corpus)
 
+        similarities = findSimilar(texts, server, corpus)
+
     except Exception, msg:
         logger.debug(u"%s" % msg)
 
-    # Option Ons
-    for n in range(0, len(texts)):
-        doc = u"doc_%d" % n
-
-        try:
-            for sim in server.find_similar(doc):
-                m = sim[0]
-
-                # Compares 'doc_m' to 'doc_n'
-                if sim[0] != doc:
-
-                    if float(sim[1]) > similarity:
-
-                        logger.info(u"++Find similar doc_%d to %s" % (n, corpus[n][u"tokens"],))
-
-                        mi = int(m.index(u"_") + 1)
-                        nm = int(m[mi:])
-
-                        logger.info(u"\t%s %3.2f %s" % (sim[0], sim[1], corpus[nm][u"tokens"]))
-
-                        logger.info(u"Within Threshold : %s\t%s \t %3.2f" % (m[mi:], sim[0], float(sim[1])))
-
-                        d = [unicode(x) for x in corpus[n][u"tokens"]]
-                        e = [unicode(y) for y in corpus[nm][u"tokens"]]
-
-                        s1 = set(e)
-                        s2 = set(d)
-                        common = s1 & s2
-                        lc = [x for x in common]
-
-                        if len(lc) > 3:
-                            logger.info(u"\t===>Common Topics : %s%s" % (lc, os.linesep))
-        except Exception, msg:
-            logger.error(u"%s - %d : %d" % (msg, nm, n))
-
-    if False:
-        # Option two
-        doc = {u"tokens": utils.simple_preprocess(u"Graph and minors and humans and trees.")}
-        logger.info(u"%s" % server.find_similar(doc, min_score=0.4, max_results=50))
+    return similarities
 
 
 if __name__ == u"__main__":
 
-    if True:
-        GensimClient(getTexts())
-    elif False:
-        GensimClient(getTextsFromMongoDB())
-    else:
-        with open(u"V1_RTP_Requirements.csv", "rb") as f:
-            text = f.readlines()
+    runDdir = u'.%srun' % os.sep
+    if not os.path.isdir(runDdir):
+        os.makedirs(runDdir)
 
-        GensimClient(text)
+    fileRequirements = u"..%sPMIS Requirements_v3.csv" % os.sep
+    fileSimilarities = u"run%sSimilarity.lp" % os.sep
+
+    if True:
+        similarities = GensimClient(getTexts(fileRequirements))
+    else:
+        similarities = GensimClient(getTextsFromMongoDB())
+
+    saveList(similarities, fileSimilarities)
