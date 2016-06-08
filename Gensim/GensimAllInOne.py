@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # __author__ = "morrj140"
 from pymongo import MongoClient
-
+from logSimilarities import *
 import os
 from gensim import utils
 from simserver import SessionServer
@@ -174,7 +174,7 @@ if __name__ == u"__main__":
     if not os.path.isdir(runDdir):
         os.makedirs(runDdir)
 
-    fileRequirements = u"..%sPMIS Requirements_v3.csv" % os.sep
+    fileRequirements = u"..%sPMIS Requirements_v4.csv" % os.sep
     fileSimilarities = u"run%sSimilarity.lp" % os.sep
 
     if True:
@@ -183,3 +183,5 @@ if __name__ == u"__main__":
         similarities = GensimClient(getTextsFromMongoDB())
 
     saveList(similarities, fileSimilarities)
+
+    logSimilarities()

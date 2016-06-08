@@ -18,8 +18,8 @@ def updateCounts(term, d):
                 d[t] = 1
     return d
 
+def logSimilarities():
 
-if __name__ == u"__main__":
     fileSim = u".%srun%sSimilarity.lp" % (os.sep, os.sep)
     fileSimCSV = fileSim[:-3] + u".csv"
     similarities = loadList(fileSim)
@@ -57,3 +57,6 @@ if __name__ == u"__main__":
             logger.info(u"%s" % output)
             fs.write(output)
             fs.write(os.linesep)
+
+    if __name__ == u"__main__":
+        logSimilarities
